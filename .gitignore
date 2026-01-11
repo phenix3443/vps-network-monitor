@@ -57,6 +57,7 @@ vps_monitor_results_*.html
 vps_monitor_results_*.md
 monitor_results_*.json
 test_result*.json
+test_results_*.md
 *.log
 vps_monitor.log
 *.pid
