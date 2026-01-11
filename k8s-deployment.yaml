@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vps-network-monitor
+  labels:
+    app: vps-network-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vps-network-monitor
+  template:
+    metadata:
+      labels:
+        app: vps-network-monitor
+    spec:
+      containers:
+      - name: vps-monitor
+        image: vps-network-monitor:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+          name: api
+          protocol: TCP
+        - containerPort: 8000
+          name: metrics
+          protocol: TCP
+        env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: METRICS_PORT
+          value: "8000"
+        - name: LOG_FILE
+          value: "/var/log/vps-monitor.log"
+        volumeMounts:
+        - name: config
+          mountPath: /app/config/vps.json
+          subPath: vps.json
+        - name: logs
+          mountPath: /var/log
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+      volumes:
+      - name: config
+        configMap:
+          name: vps-config
+      - name: logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vps-network-monitor
+  labels:
+    app: vps-network-monitor
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5000
+    targetPort: 5000
+    protocol: TCP
+    name: api
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: metrics
+  selector:
+    app: vps-network-monitor
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vps-config
+data:
+  vps.json: |
+    {
+      "vps_list": [
+        {
+          "name": "示例节点",
+          "ip": "example.com",
+          "provider": "Example",
+          "region": "示例区域"
+        }
+      ],
+      "ping_count": 10,
+      "ping_interval": 1,
+      "monitor_interval": 60
+    }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vps-network-monitor
+  labels:
+    app: vps-network-monitor
+spec:
+  selector:
+    matchLabels:
+      app: vps-network-monitor
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s

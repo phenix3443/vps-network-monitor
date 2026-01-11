@@ -1,0 +1,46 @@
+[project]
+name = "vps-network-monitor"
+version = "0.1.0"
+description = "VPS 访问情况实时监控程序，用于检测不同 VPS 厂商的延迟、丢包率等网络指标"
+authors = [{ name = "Your Name", email = "your.email@example.com" }]
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+matplotlib = "^3.7.0"
+prometheus-client = "^0.19.0"
+seaborn = "^0.13.0"
+jinja2 = "^3.1.2"
+flask = "^3.0.0"
+flask-cors = "^4.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+black = "^23.7.0"
+ruff = "^0.0.287"
+mypy = "^1.5.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

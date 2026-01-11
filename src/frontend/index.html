@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPS 网络监控 - 实时地图</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 1000;
+            min-width: 300px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .control-panel h2 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 18px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .control-group input,
+        .control-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 10px;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .stats {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .stats-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            left: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .legend h3 {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-top: 5px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div class="control-panel">
+        <h2>VPS 网络监控</h2>
+
+        <div class="control-group">
+            <label>Ping 次数</label>
+            <input type="number" id="pingCount" value="10" min="1" max="100">
+        </div>
+
+        <div class="control-group">
+            <div class="checkbox-group">
+                <input type="checkbox" id="useMtr">
+                <label for="useMtr">启用 MTR 路径追踪</label>
+            </div>
+        </div>
+
+        <button class="btn" id="runTestBtn" onclick="runTest()">执行测试</button>
+        <button class="btn btn-secondary" onclick="refreshResults()">刷新结果</button>
+        <button class="btn btn-secondary" onclick="reloadConfig()">重新加载配置</button>
+
+        <div id="status"></div>
+        <div class="stats" id="stats" style="display: none;">
+            <div class="stats-item">
+                <span>测试总数:</span>
+                <span id="totalTests">0</span>
+            </div>
+            <div class="stats-item">
+                <span>成功:</span>
+                <span id="successTests" style="color: #28a745;">0</span>
+            </div>
+            <div class="stats-item">
+                <span>失败:</span>
+                <span id="failedTests" style="color: #dc3545;">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <h3>图例</h3>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #28a745;"></div>
+            <span>正常 (延迟 &lt; 100ms)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ffc107;"></div>
+            <span>警告 (100-200ms)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #dc3545;"></div>
+            <span>异常 (&gt; 200ms 或失败)</span>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const API_BASE = window.location.origin;
+        let map;
+        let markers = {};
+        let lines = [];
+        let userLocation = null;
+
+        // 初始化地图
+        function initMap() {
+            map = L.map('map').setView([35.0, 105.0], 3);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19,
+            }).addTo(map);
+
+            // 获取用户位置
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLocation = [position.coords.latitude, position.coords.longitude];
+                        map.setView(userLocation, 6);
+                        L.marker(userLocation)
+                            .addTo(map)
+                            .bindPopup('您的位置')
+                            .openPopup();
+                    },
+                    () => {
+                        console.log('无法获取位置信息');
+                    }
+                );
+            }
+
+            loadVPSList();
+            refreshResults();
+        }
+
+        // 加载VPS列表
+        async function loadVPSList() {
+            try {
+                const response = await fetch(`${API_BASE}/api/vps/list`);
+                const data = await response.json();
+                return data.vps_list || [];
+            } catch (error) {
+                console.error('加载VPS列表失败:', error);
+                showStatus('加载VPS列表失败', 'error');
+                return [];
+            }
+        }
+
+        // 获取地理位置（简化版，实际应该从配置或API获取）
+        function getLocation(region) {
+            const locationMap = {
+                '日本东京': [35.6762, 139.6503],
+                '新加坡': [1.3521, 103.8198],
+                '美国洛杉矶': [34.0522, -118.2437],
+                '美国纽约': [40.7128, -74.0060],
+                '德国法兰克福': [50.1109, 8.6821],
+                '英国伦敦': [51.5074, -0.1278],
+                '香港': [22.3193, 114.1694],
+                '北京': [39.9042, 116.4074],
+                '上海': [31.2304, 121.4737],
+                '深圳': [22.5431, 114.0579],
+            };
+
+            for (const [key, value] of Object.entries(locationMap)) {
+                if (region.includes(key)) {
+                    return value;
+                }
+            }
+
+            // 默认返回一个位置
+            return [35.0, 105.0];
+        }
+
+        // 获取延迟颜色
+        function getLatencyColor(avg) {
+            if (!avg) return '#dc3545';
+            if (avg < 100) return '#28a745';
+            if (avg < 200) return '#ffc107';
+            return '#dc3545';
+        }
+
+        // 刷新结果
+        async function refreshResults() {
+            try {
+                const response = await fetch(`${API_BASE}/api/results/latest`);
+                const data = await response.json();
+                updateMap(data.results || []);
+            } catch (error) {
+                console.error('刷新结果失败:', error);
+            }
+        }
+
+        // 更新地图
+        async function updateMap(results) {
+            // 清除现有标记和线条
+            Object.values(markers).forEach(marker => map.removeLayer(marker));
+            lines.forEach(line => map.removeLayer(line));
+            markers = {};
+            lines = [];
+
+            const vpsList = await loadVPSList();
+            const vpsMap = {};
+            vpsList.forEach(vps => {
+                vpsMap[vps.name] = vps;
+            });
+
+            let successCount = 0;
+            let failedCount = 0;
+
+            results.forEach(result => {
+                const vps = vpsMap[result.name];
+                if (!vps) return;
+
+                const location = vps.location || getLocation(result.region);
+                const ping = result.ping || {};
+                const success = ping.success;
+                const avg = ping.avg || 0;
+
+                if (success) successCount++;
+                else failedCount++;
+
+                // 创建标记
+                const color = success ? getLatencyColor(avg) : '#dc3545';
+                const marker = L.circleMarker(location, {
+                    radius: 8,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8,
+                }).addTo(map);
+
+                const popupContent = `
+                    <div style="min-width: 200px;">
+                        <h3 style="margin: 0 0 10px 0;">${result.name}</h3>
+                        <p><strong>提供商:</strong> ${result.provider}</p>
+                        <p><strong>区域:</strong> ${result.region}</p>
+                        <p><strong>IP:</strong> ${result.ip}</p>
+                        ${success ? `
+                            <p><strong>平均延迟:</strong> ${avg.toFixed(2)} ms</p>
+                            <p><strong>丢包率:</strong> ${ping.packet_loss.toFixed(1)}%</p>
+                        ` : `
+                            <p style="color: #dc3545;"><strong>状态:</strong> 测试失败</p>
+                        `}
+                    </div>
+                `;
+                marker.bindPopup(popupContent);
+                markers[result.name] = marker;
+
+                // 如果用户位置已知，绘制连接线
+                if (userLocation && success) {
+                    const line = L.polyline([userLocation, location], {
+                        color: color,
+                        weight: 2,
+                        opacity: 0.6,
+                        dashArray: '5, 5',
+                    }).addTo(map);
+                    lines.push(line);
+                }
+            });
+
+            // 更新统计
+            document.getElementById('totalTests').textContent = results.length;
+            document.getElementById('successTests').textContent = successCount;
+            document.getElementById('failedTests').textContent = failedCount;
+            document.getElementById('stats').style.display = 'block';
+        }
+
+        // 执行测试
+        async function runTest() {
+            const btn = document.getElementById('runTestBtn');
+            const pingCount = parseInt(document.getElementById('pingCount').value);
+            const useMtr = document.getElementById('useMtr').checked;
+
+            btn.disabled = true;
+            btn.innerHTML = '测试中...<span class="loading"></span>';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/test/run`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        ping_count: pingCount,
+                        use_mtr: useMtr,
+                    }),
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showStatus('测试完成', 'success');
+                    setTimeout(() => refreshResults(), 1000);
+                } else {
+                    showStatus('测试失败: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                showStatus('测试失败: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '执行测试';
+            }
+        }
+
+        // 重新加载配置
+        async function reloadConfig() {
+            try {
+                const response = await fetch(`${API_BASE}/api/config/reload`, {
+                    method: 'POST',
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showStatus('配置已重新加载', 'success');
+                    loadVPSList();
+                }
+            } catch (error) {
+                showStatus('重新加载配置失败', 'error');
+            }
+        }
+
+        // 显示状态
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.className = 'status';
+            }, 3000);
+        }
+
+        // 页面加载时初始化
+        window.addEventListener('load', initMap);
+
+        // 定期刷新结果
+        setInterval(refreshResults, 30000); // 每30秒刷新一次
+    </script>
+</body>
+</html>
